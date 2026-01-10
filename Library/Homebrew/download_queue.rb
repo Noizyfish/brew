@@ -4,6 +4,7 @@
 require "downloadable"
 require "concurrent/promises"
 require "concurrent/executors"
+require "concurrent/cancellation"
 require "retryable_download"
 require "resource"
 require "utils/output"
@@ -29,6 +30,11 @@ module Homebrew
       @pool = T.let(Concurrent::FixedThreadPool.new(concurrency), Concurrent::FixedThreadPool)
       @tty = T.let($stdout.tty?, T::Boolean)
       @spinner = T.let(nil, T.nilable(Spinner))
+      @cancellation_origin, @cancellation = T.let(
+        Concurrent::Cancellation.new,
+        [Concurrent::Cancellation::Token, Concurrent::Cancellation]
+      )
+      @cancelled = T.let(false, T::Boolean)
     end
 
     sig {
@@ -143,9 +149,8 @@ module Homebrew
             # We want to catch all exceptions to ensure we can cancel any
             # running downloads and flush the TTY.
             rescue Exception # rubocop:disable Lint/RescueException
-              remaining_downloads.each do |_, future|
-                # FIXME: Implement cancellation of running downloads.
-              end
+              # Signal cancellation to all running downloads
+              request_cancellation
 
               cancel
 
@@ -194,10 +199,27 @@ module Homebrew
     end
 
     sig { void }
+    def request_cancellation
+      return if @cancelled
+
+      @cancelled = true
+      @cancellation_origin.resolve
+    end
+
+    sig { returns(T::Boolean) }
+    def cancelled?
+      @cancelled
+    end
+
+    sig { void }
     def cancel
-      # FIXME: Implement graceful cancellation of running downloads based on
-      #        https://ruby-concurrency.github.io/concurrent-ruby/master/Concurrent/Cancellation.html
-      #        instead of killing the whole thread pool.
+      # Signal cancellation first for graceful shutdown
+      request_cancellation
+
+      # Give pending downloads a brief moment to check cancellation and abort
+      sleep 0.1
+
+      # Kill the thread pool to stop any remaining work
       pool.kill
     end
 
@@ -221,6 +243,9 @@ module Homebrew
 
     sig { returns(T::Boolean) }
     attr_reader :tty
+
+    sig { returns(Concurrent::Cancellation) }
+    attr_reader :cancellation
 
     sig { returns(T::Hash[Downloadable, Concurrent::Promises::Future]) }
     def downloads

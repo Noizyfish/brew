@@ -7,10 +7,17 @@ require "utils/output"
 
 module Homebrew
   module Bundle
-    # TODO: refactor into multiple modules
+    # Handles dumping installed formulae information for Brewfile generation.
+    # Provides methods for querying formula metadata, dependencies, aliases, and oldnames.
     module FormulaDumper
       extend Utils::Output::Mixin
 
+      # Hash structure for formula data
+      FormulaHash = T.type_alias do
+        T::Hash[Symbol, T.untyped]
+      end
+
+      sig { void }
       def self.reset!
         require "bundle/brew_services"
 
@@ -22,6 +29,7 @@ module Homebrew
         @formula_oldnames = nil
       end
 
+      sig { returns(T.nilable(T::Array[FormulaHash])) }
       def self.formulae
         return @formulae if @formulae
 
@@ -29,6 +37,7 @@ module Homebrew
         @formulae
       end
 
+      sig { params(name: T.nilable(String)).returns(T.any(FormulaHash, T::Hash[String, FormulaHash])) }
       def self.formulae_by_full_name(name = nil)
         return @formulae_by_full_name[name] if name.present? && @formulae_by_full_name&.key?(name)
 
@@ -52,10 +61,12 @@ module Homebrew
         {}
       end
 
+      sig { params(name: String).returns(T.nilable(FormulaHash)) }
       def self.formulae_by_name(name)
         formulae_by_full_name(name) || @formulae_by_name[name]
       end
 
+      sig { params(describe: T::Boolean, no_restart: T::Boolean).returns(String) }
       def self.dump(describe: false, no_restart: false)
         require "bundle/brew_services"
 
@@ -78,6 +89,7 @@ module Homebrew
         end.join("\n")
       end
 
+      sig { returns(T::Hash[String, String]) }
       def self.formula_aliases
         return @formula_aliases if @formula_aliases
 
@@ -97,6 +109,7 @@ module Homebrew
         @formula_aliases
       end
 
+      sig { returns(T::Hash[String, String]) }
       def self.formula_oldnames
         return @formula_oldnames if @formula_oldnames
 

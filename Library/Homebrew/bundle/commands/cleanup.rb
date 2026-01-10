@@ -6,8 +6,10 @@ require "utils/formatter"
 module Homebrew
   module Bundle
     module Commands
-      # TODO: refactor into multiple modules
+      # Handles cleanup of formulae, casks, taps, and extensions not in the Brewfile.
+      # Identifies packages to uninstall and optionally removes them.
       module Cleanup
+        sig { void }
         def self.reset!
           require "bundle/cask_dumper"
           require "bundle/formula_dumper"
@@ -27,6 +29,20 @@ module Homebrew
           Homebrew::Bundle::BrewServices.reset!
         end
 
+        sig do
+          params(
+            global:   T::Boolean,
+            file:     T.nilable(String),
+            force:    T::Boolean,
+            zap:      T::Boolean,
+            dsl:      T.untyped,
+            formulae: T::Boolean,
+            casks:    T::Boolean,
+            taps:     T::Boolean,
+            vscode:   T::Boolean,
+            flatpak:  T::Boolean,
+          ).void
+        end
         def self.run(global: false, file: nil, force: false, zap: false, dsl: nil,
                      formulae: true, casks: true, taps: true, vscode: true, flatpak: true)
           @dsl ||= dsl
@@ -109,11 +125,13 @@ module Homebrew
           end
         end
 
+        sig { params(global: T::Boolean, file: T.nilable(String)).returns(T::Array[String]) }
         def self.casks_to_uninstall(global: false, file: nil)
           require "bundle/cask_dumper"
           Homebrew::Bundle::CaskDumper.cask_names - kept_casks(global:, file:)
         end
 
+        sig { params(global: T::Boolean, file: T.nilable(String)).returns(T::Array[String]) }
         def self.formulae_to_uninstall(global: false, file: nil)
           kept_formulae = self.kept_formulae(global:, file:)
 
@@ -192,8 +210,9 @@ module Homebrew
           dependencies.uniq
         end
 
-        IGNORED_TAPS = %w[homebrew/core].freeze
+        IGNORED_TAPS = T.let(%w[homebrew/core].freeze, T::Array[String])
 
+        sig { params(global: T::Boolean, file: T.nilable(String)).returns(T::Array[String]) }
         def self.taps_to_untap(global: false, file: nil)
           require "bundle/brewfile"
           require "bundle/tap_dumper"
@@ -206,6 +225,7 @@ module Homebrew
           current_taps - kept_taps - IGNORED_TAPS
         end
 
+        sig { params(formula: String).returns(T.nilable(Formula)) }
         def self.lookup_formula(formula)
           Formulary.factory(formula)
         rescue TapFormulaUnavailableError
@@ -213,6 +233,7 @@ module Homebrew
           nil
         end
 
+        sig { params(global: T::Boolean, file: T.nilable(String)).returns(T::Array[String]) }
         def self.vscode_extensions_to_uninstall(global: false, file: nil)
           require "bundle/brewfile"
           @dsl ||= Brewfile.read(global:, file:)
@@ -228,6 +249,7 @@ module Homebrew
           current_extensions - kept_extensions
         end
 
+        sig { params(global: T::Boolean, file: T.nilable(String)).returns(T::Array[String]) }
         def self.flatpaks_to_uninstall(global: false, file: nil)
           return [].freeze unless Bundle.flatpak_installed?
 
@@ -245,8 +267,9 @@ module Homebrew
           current_flatpaks - kept_flatpaks
         end
 
+        sig { params(cmd: T.any(String, Pathname), args: String).returns(String) }
         def self.system_output_no_stderr(cmd, *args)
-          IO.popen([cmd, *args], err: :close).read
+          IO.popen([cmd.to_s, *args], err: :close).read.to_s
         end
       end
     end
