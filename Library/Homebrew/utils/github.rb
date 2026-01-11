@@ -17,12 +17,14 @@ module GitHub
 
   MAX_PER_PAGE = T.let(100, Integer)
 
+  sig { params(repo: String, filters: T.untyped).returns(T::Array[T::Hash[String, T.untyped]]) }
   def self.issues(repo:, **filters)
     uri = url_to("repos", repo, "issues")
     uri.query = URI.encode_www_form(filters)
     API.open_rest(uri)
   end
 
+  sig { params(query: String, qualifiers: T.untyped).returns(T::Array[T::Hash[String, T.untyped]]) }
   def self.search_issues(query, **qualifiers)
     json = search("issues", query, **qualifiers)
     json.fetch("items", [])
@@ -35,16 +37,27 @@ module GitHub
     API.open_rest(url, data:, scopes: CREATE_GIST_SCOPES)["html_url"]
   end
 
+  sig { params(repo: String, title: String, body: String).returns(String) }
   def self.create_issue(repo, title, body)
     url = "#{API_URL}/repos/#{repo}/issues"
     data = { "title" => title, "body" => body }
     API.open_rest(url, data:, scopes: CREATE_ISSUE_FORK_OR_PR_SCOPES)["html_url"]
   end
 
+  sig { params(user: String, repo: String).returns(T::Hash[String, T.untyped]) }
   def self.repository(user, repo)
     API.open_rest(url_to("repos", user, repo))
   end
 
+  sig do
+    params(
+      name:            String,
+      tap:             T.nilable(Tap),
+      tap_remote_repo: T.nilable(String),
+      state:           T.nilable(String),
+      type:            T.nilable(String),
+    ).returns(T::Array[T::Hash[String, T.untyped]])
+  end
   def self.issues_for_formula(name, tap: CoreTap.instance, tap_remote_repo: tap&.full_name, state: nil, type: nil)
     return [] unless tap_remote_repo
 
@@ -67,6 +80,7 @@ module GitHub
     ["admin", "write"].include?(permission(repo, user)["permission"])
   end
 
+  sig { params(query: String, only: T.nilable(String)).void }
   def self.print_pull_requests_matching(query, only = nil)
     open_or_closed_prs = search_issues(query, is: only, type: "pr", user: "Homebrew")
 
@@ -126,6 +140,7 @@ module GitHub
     API.open_rest(uri) { |json| json.fetch("private", true) }
   end
 
+  sig { params(main_params: String, qualifiers: T.untyped).returns(String) }
   def self.search_query_string(*main_params, **qualifiers)
     params = main_params
 
@@ -147,16 +162,26 @@ module GitHub
     "q=#{URI.encode_www_form_component(params.compact.join(" "))}&per_page=#{MAX_PER_PAGE}"
   end
 
+  sig { params(subroutes: String).returns(URI::Generic) }
   def self.url_to(*subroutes)
     URI.parse([API_URL, *subroutes].join("/"))
   end
 
+  sig { params(entity: String, queries: String, qualifiers: T.untyped).returns(T::Hash[String, T.untyped]) }
   def self.search(entity, *queries, **qualifiers)
     uri = url_to "search", entity
     uri.query = search_query_string(*queries, **qualifiers)
     API.open_rest(uri)
   end
 
+  sig do
+    params(
+      user:         String,
+      repo:         String,
+      pull_request: T.any(String, Integer),
+      commit:       T.nilable(String),
+    ).returns(T::Array[T::Hash[String, String]])
+  end
   def self.repository_approved_reviews(user, repo, pull_request, commit: nil)
     query = <<~EOS
       { repository(name: "#{repo}", owner: "#{user}") {
@@ -198,6 +223,7 @@ module GitHub
     end
   end
 
+  sig { params(user: String, repo: String, workflow: String, ref: String, inputs: T.untyped).void }
   def self.workflow_dispatch_event(user, repo, workflow, ref, **inputs)
     url = "#{API_URL}/repos/#{user}/#{repo}/actions/workflows/#{workflow}/dispatches"
     API.open_rest(url, data:           { ref:, inputs: },
@@ -217,6 +243,7 @@ module GitHub
     API.open_rest(url, request_method: :GET)
   end
 
+  sig { params(user: String, repo: String, tag: String, previous_tag: T.nilable(String)).returns(T::Hash[String, T.untyped]) }
   def self.generate_release_notes(user, repo, tag, previous_tag: nil)
     url = "#{API_URL}/repos/#{user}/#{repo}/releases/generate-notes"
     data = { tag_name: tag }
@@ -245,12 +272,30 @@ module GitHub
     API.open_rest(url, data:, request_method: method, scopes: CREATE_ISSUE_FORK_OR_PR_SCOPES)
   end
 
+  sig do
+    params(
+      user:        String,
+      repo:        String,
+      id:          T.any(String, Integer),
+      local_file:  T.nilable(T.any(String, Pathname)),
+      remote_file: T.nilable(String),
+    ).returns(T::Hash[String, T.untyped])
+  end
   def self.upload_release_asset(user, repo, id, local_file: nil, remote_file: nil)
     url = "https://uploads.github.com/repos/#{user}/#{repo}/releases/#{id}/assets"
     url += "?name=#{remote_file}" if remote_file
     API.open_rest(url, data_binary_path: local_file, request_method: :POST, scopes: CREATE_ISSUE_FORK_OR_PR_SCOPES)
   end
 
+  sig do
+    params(
+      user:             String,
+      repo:             String,
+      pull_request:     T.any(String, Integer),
+      workflow_id:      String,
+      artifact_pattern: String,
+    ).returns(T.nilable(T::Hash[String, T.untyped]))
+  end
   def self.get_workflow_run(user, repo, pull_request, workflow_id: "tests.yml", artifact_pattern: "bottles{,_*}")
     scopes = CREATE_ISSUE_FORK_OR_PR_SCOPES
 

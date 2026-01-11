@@ -1,10 +1,19 @@
 # typed: true # rubocop:todo Sorbet/StrictSigil
 # frozen_string_literal: true
 
+# Utility methods for process I/O operations.
 module Utils
-  IO_DEFAULT_BUFFER_SIZE = 4096
+  IO_DEFAULT_BUFFER_SIZE = T.let(4096, Integer)
   private_constant :IO_DEFAULT_BUFFER_SIZE
 
+  sig do
+    params(
+      args:    T.untyped,
+      safe:    T::Boolean,
+      options: T.untyped,
+      block:   T.nilable(T.proc.params(pipe: IO).void),
+    ).returns(String)
+  end
   def self.popen_read(*args, safe: false, **options, &block)
     output = popen(args, "rb", options, &block)
     return output if !safe || $CHILD_STATUS.success?
@@ -12,11 +21,13 @@ module Utils
     raise ErrorDuringExecution.new(args, status: $CHILD_STATUS, output: [[:stdout, output]])
   end
 
+  sig { params(args: T.untyped, options: T.untyped, block: T.nilable(T.proc.params(pipe: IO).void)).returns(String) }
   def self.safe_popen_read(*args, **options, &block)
     popen_read(*args, safe: true, **options, &block)
   end
 
-  def self.popen_write(*args, safe: false, **options)
+  sig { params(args: T.untyped, safe: T::Boolean, options: T.untyped, block: T.proc.params(pipe: IO).void).returns(String) }
+  def self.popen_write(*args, safe: false, **options, &block)
     output = ""
     popen(args, "w+b", options) do |pipe|
       # Before we yield to the block, capture as much output as we can
@@ -39,10 +50,19 @@ module Utils
     raise ErrorDuringExecution.new(args, status: $CHILD_STATUS, output: [[:stdout, output]])
   end
 
+  sig { params(args: T.untyped, options: T.untyped, block: T.proc.params(pipe: IO).void).returns(String) }
   def self.safe_popen_write(*args, **options, &block)
     popen_write(*args, safe: true, **options, &block)
   end
 
+  sig do
+    params(
+      args:    T::Array[T.untyped],
+      mode:    String,
+      options: T::Hash[Symbol, T.untyped],
+      block:   T.nilable(T.proc.params(pipe: IO).returns(T.untyped)),
+    ).returns(String)
+  end
   def self.popen(args, mode, options = {})
     IO.popen("-", mode) do |pipe|
       if pipe
