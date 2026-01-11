@@ -829,13 +829,12 @@ end
 
 # Strategy for extracting local binary packages.
 class LocalBottleDownloadStrategy < AbstractFileDownloadStrategy
-  # TODO: Call `super` here
-  # rubocop:disable Lint/MissingSuper
   sig { params(path: Pathname).void }
   def initialize(path)
+    # Use file:// URL scheme and derive name from the path
+    super("file://#{path}", path.basename.to_s, nil)
     @cached_location = T.let(path, Pathname)
   end
-  # rubocop:enable Lint/MissingSuper
 
   sig { override.void }
   def clear_cache

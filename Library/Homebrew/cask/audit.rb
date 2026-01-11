@@ -74,7 +74,7 @@ module Cask
     def new_cask? = !!@new_cask
 
     sig { returns(T::Boolean) }
-    def online? =!!@online
+    def online? = !!@online
 
     sig { returns(T::Boolean) }
     def signing? = !!@signing
